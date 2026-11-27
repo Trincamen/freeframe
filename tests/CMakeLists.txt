@@ -2,6 +2,7 @@ add_executable(freeframe_tests
   test_main.cpp
   test_format.cpp
   test_gpu_backend.cpp
+  test_recommendations.cpp
   test_result.cpp
 )
 if(WIN32)
