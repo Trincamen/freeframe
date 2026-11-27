@@ -1,6 +1,21 @@
 # Progresso do FreeFrame
 
-## Marco atual: M0 — Esqueleto (concluído no Windows; falta CI/Linux)
+## Marco atual: M1 — Mini-Magpie no Windows (em andamento)
+
+Contrato núcleo ↔ app: `core/include/freeframe/d3d11/scaler.hpp` (commit 8074752).
+
+| # | Tarefa | Agente | Onde | Status |
+|---|---|---|---|---|
+| S1 | Backend D3D11: device, scaler Nearest/Bilinear/FSR1 (EASU+RCAS), GpuTimer, shaders FXC embutidos, `freeframe-cli bench-scale`, testes | Sonnet | worktree `../FreeFrame-s1`, branch `m1-s1-core` | em andamento |
+| S2 | `FreeFrame.exe`: captura WGC, overlay em tela cheia, swapchain flip+UAV, hotkeys Ctrl+Alt+S/O, estatísticas ImGui, log | Sonnet | worktree `../FreeFrame-s2`, branch `m1-s2-app` | em andamento |
+| I1 | Merge S1+S2, remover fallbacks TEMP, build/CI | Opus | main | pendente |
+| U1 | Teste com jogo real 1280x720 → tela cheia na RTX 4070 (aceite) | Usuário | — | pendente |
+
+Nota: o isolamento automático de worktree do Claude Code recusou o caminho (diferença `c:` vs `C:`); worktrees criadas manualmente com `git worktree add`.
+
+---
+
+## M0 — Esqueleto (concluído 2026-11-27)
 
 ### Tarefas
 | # | Tarefa | Agente | Arquivos | Status |
@@ -10,7 +25,7 @@
 | T3 | CMake raiz + core (`IGpuBackend`, Vulkan via volk, DXGI) + `freeframe-cli` + testes doctest | Sonnet | CMakeLists.txt, cmake/, core/, cli/, tests/ | concluída |
 | T3b | Correções: `toString`→`to_string` (conflito ADL com doctest); dedupe DXGI por LUID | Haiku | core/, cli/, tests/ | concluída |
 | T4 | Revisão + integração + build local | Opus | — | concluída |
-| T5 | CI verde no GitHub (Windows + Ubuntu) | — | — | **pendente: repositório no GitHub** |
+| T5 | CI no GitHub (Windows + Ubuntu) | Opus | — | Linux clang/gcc OK; Windows corrigido (runner windows-2022) |
 
 ### Resultado local (Windows, MSVC 19.44, `/W4 /WX`)
 - Build Release: OK, 0 warnings.
@@ -24,7 +39,7 @@
   Decisão: **não** deduplicar por identidade PCI (esconderia duas GPUs idênticas reais, relevante para Dual GPU).
   No M1, o adaptador D3D11 será escolhido casando o `deviceLUID` do Vulkan (`VkPhysicalDeviceIDProperties`)
   ou por `IDXGIFactory6::EnumAdapterByGpuPreference`.
-- Linux ainda não compilado (será coberto pelo CI ou pelo PC Ubuntu do usuário).
+- Linux: build + testes verdes no CI (Ubuntu 24.04, clang e gcc).
 
 ### Decisões
 Ver PROJETO.md, seção 14 (D1–D6).
@@ -32,5 +47,5 @@ Ver PROJETO.md, seção 14 (D1–D6).
 ### Pendências do usuário
 - [x] VS Build Tools 2022 instalado (winget).
 - [x] Vulkan SDK 1.4.363.0 instalado em `C:\VulkanSDK` (inclui dxc, glslc, validation layers).
-- [ ] Criar repositório no GitHub e autorizar o push, para o CI rodar (Windows + Ubuntu).
+- [x] Repositório público: https://github.com/Trincamen/freeframe
 - [ ] (Opcional) Compilar no Ubuntu: `cmake --preset linux-clang && cmake --build --preset linux-clang && ctest --preset linux-clang`.
