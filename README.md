@@ -10,7 +10,7 @@ Free, open-source upscaling and frame generation for any game or window — Wind
 
 ![CI](https://github.com/Trincamen/freeframe/actions/workflows/ci.yml/badge.svg)
 
-**Status:** 🚧 Early development — milestone M0 (skeleton)
+**Status:** 🚧 Early development — milestone M1 (overlay upscaling on Windows)
 
 ### Features (planned)
 
@@ -37,7 +37,7 @@ Free, open-source upscaling and frame generation for any game or window — Wind
 
 #### Windows
 
-Requires Visual Studio 2022 (or Build Tools) with the "Desktop development with C++" workload, which includes CMake. The Vulkan SDK is **not** required for M0, since the loader comes with the GPU driver.
+Requires Visual Studio 2022 (or Build Tools) with the "Desktop development with C++" workload, which includes CMake. The Vulkan SDK is **not** required: shaders are compiled with `fxc.exe` from the Windows SDK (installed with the C++ workload).
 
 ```
 cmake --preset windows-msvc
@@ -61,10 +61,30 @@ ctest --preset linux-clang
 
 You also need a Vulkan-capable driver: `mesa-vulkan-drivers` or the proprietary NVIDIA driver, plus `libvulkan1`.
 
+### Usage (Windows, M1)
+
+- Run the game in **windowed** or **borderless windowed** mode at a lower resolution (e.g. 1280x720). Exclusive fullscreen is not supported.
+- Open `build\windows-msvc\app-windows\Release\FreeFrame.exe`. It shows no window; it waits for the hotkeys.
+- With the game in focus, `Ctrl+Alt+S` toggles the scaling to fullscreen; `Ctrl+Alt+O` toggles the statistics (base FPS, output FPS, GPU ms).
+- Command-line options: `--algo nearest|bilinear|fsr1` (default `fsr1`), `--sharpness 0..1` (default `0.5`), `--target-title "<text>"`, `--log <file>`, `--no-vsync`, `--present-every-vblank`, `--exit-after <s>`.
+- Benchmark:
+
+```
+build\windows-msvc\cli\Release\freeframe-cli.exe bench-scale --algo all --src 1280x720 --dst 2560x1440
+```
+
+- Measured performance (RTX 4070, 1280x720 → 2560x1440, scaling stage only, GPU time):
+
+| Algorithm | Time |
+|---|---|
+| Nearest | 0.08 ms |
+| Bilinear | 0.04 ms |
+| FSR 1 (EASU + RCAS) | 0.16 ms |
+
 ### Roadmap
 
-- **M0** — skeleton
-- **M1** — overlay + FSR 1 on Windows
+- **M0** — skeleton ✅ done
+- **M1** — overlay + FSR 1 on Windows 🚧 in progress
 - **M2** — background detection + per-game profiles
 - **M2.5** — all upscalers
 - **M3** — frame generation X2
@@ -90,7 +110,7 @@ Upscaling e geração de quadros gratuitos e de código aberto para qualquer jog
 
 ![CI](https://github.com/Trincamen/freeframe/actions/workflows/ci.yml/badge.svg)
 
-**Status:** 🚧 Em desenvolvimento inicial — marco M0 (esqueleto)
+**Status:** 🚧 Em desenvolvimento inicial — marco M1 (upscaling em overlay no Windows)
 
 ### Recursos (planejados)
 
@@ -117,7 +137,7 @@ Upscaling e geração de quadros gratuitos e de código aberto para qualquer jog
 
 #### Windows
 
-Requer Visual Studio 2022 (ou Build Tools) com a carga de trabalho "Desktop development with C++", que inclui o CMake. O Vulkan SDK **não** é necessário para o M0, pois o loader vem com o driver da GPU.
+Requer Visual Studio 2022 (ou Build Tools) com a carga de trabalho "Desktop development with C++", que inclui o CMake. O Vulkan SDK **não** é necessário: os shaders são compilados com o `fxc.exe` do Windows SDK (instalado junto com o workload de C++).
 
 ```
 cmake --preset windows-msvc
@@ -141,10 +161,30 @@ ctest --preset linux-clang
 
 Também é preciso um driver com suporte a Vulkan: `mesa-vulkan-drivers` ou o driver proprietário da NVIDIA, além de `libvulkan1`.
 
+### Uso (Windows, M1)
+
+- Rode o jogo em **janela** ou **janela sem borda** numa resolução menor (ex.: 1280x720). Tela cheia exclusiva não é suportada.
+- Abra `build\windows-msvc\app-windows\Release\FreeFrame.exe`. Ele não mostra janela; fica esperando os atalhos.
+- Com o jogo em foco, `Ctrl+Alt+S` liga/desliga a escala para a tela cheia; `Ctrl+Alt+O` liga/desliga as estatísticas (FPS base, FPS de saída, ms de GPU).
+- Opções de linha de comando: `--algo nearest|bilinear|fsr1` (padrão `fsr1`), `--sharpness 0..1` (padrão `0.5`), `--target-title "<texto>"`, `--log <arquivo>`, `--no-vsync`, `--present-every-vblank`, `--exit-after <s>`.
+- Benchmark:
+
+```
+build\windows-msvc\cli\Release\freeframe-cli.exe bench-scale --algo all --src 1280x720 --dst 2560x1440
+```
+
+- Desempenho medido (RTX 4070, 1280x720 → 2560x1440, só a etapa de escala, tempo de GPU):
+
+| Algoritmo | Tempo |
+|---|---|
+| Nearest | 0.08 ms |
+| Bilinear | 0.04 ms |
+| FSR 1 (EASU + RCAS) | 0.16 ms |
+
 ### Roadmap
 
-- **M0** — esqueleto
-- **M1** — overlay + FSR 1 no Windows
+- **M0** — esqueleto ✅ concluído
+- **M1** — overlay + FSR 1 no Windows 🚧 em andamento
 - **M2** — segundo plano + detecção + perfis
 - **M2.5** — todos os escaladores
 - **M3** — geração de quadros X2

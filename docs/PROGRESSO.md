@@ -6,10 +6,14 @@ Contrato núcleo ↔ app: `core/include/freeframe/d3d11/scaler.hpp` (commit 8074
 
 | # | Tarefa | Agente | Onde | Status |
 |---|---|---|---|---|
-| S1 | Backend D3D11: device, scaler Nearest/Bilinear/FSR1 (EASU+RCAS), GpuTimer, shaders FXC embutidos, `freeframe-cli bench-scale`, testes | Sonnet | worktree `../FreeFrame-s1`, branch `m1-s1-core` | em andamento |
-| S2 | `FreeFrame.exe`: captura WGC, overlay em tela cheia, swapchain flip+UAV, hotkeys Ctrl+Alt+S/O, estatísticas ImGui, log | Sonnet | worktree `../FreeFrame-s2`, branch `m1-s2-app` | em andamento |
-| I1 | Merge S1+S2, remover fallbacks TEMP, build/CI | Opus | main | pendente |
+| S1 | Backend D3D11: device, scaler Nearest/Bilinear/FSR1 (EASU+RCAS), GpuTimer, shaders FXC embutidos, `freeframe-cli bench-scale`, testes | Sonnet | worktree `../FreeFrame-s1`, branch `m1-s1-core` | concluída (b2ddb47); FSR1 0,16 ms a 1440p na 4070 |
+| S2 | `FreeFrame.exe`: captura WGC, overlay em tela cheia, swapchain flip+UAV, hotkeys Ctrl+Alt+S/O, estatísticas ImGui, log | Sonnet | worktree `../FreeFrame-s2`, branch `m1-s2-app` | concluída (f1a117b + d9cec0e: sem TEMP, render só com quadro novo) |
+| I1 | Merge S1+S2, remover fallbacks TEMP, build/CI | Opus | main | concluída — CI verde (Win + Linux) |
 | U1 | Teste com jogo real 1280x720 → tela cheia na RTX 4070 (aceite) | Usuário | — | pendente |
+
+Teste automatizado (vkcube 60 FPS → overlay 2560x1440@180 Hz, FSR1): base 61 / saída 61 FPS, GPU captura 0,03 + escala 0,3–1,1 ms.
+
+Incidente: o agente S2 truncou por engano o `CMakeLists.txt` do repo principal (caminho relativo num script); restaurado com `git checkout` pelo Opus. Regra adicionada aos pedidos: caminhos absolutos sempre.
 
 Nota: o isolamento automático de worktree do Claude Code recusou o caminho (diferença `c:` vs `C:`); worktrees criadas manualmente com `git worktree add`.
 
