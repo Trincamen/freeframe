@@ -113,6 +113,10 @@ struct App::Session {
     double cpuSeconds = 0;
     StatsSnapshot snapshot;
 
+    // Last source/output pair written to the log (detects scaling changes).
+    bool scaleLogged = false;
+    uint32_t lastSrcW = 0, lastSrcH = 0, lastDstW = 0, lastDstH = 0;
+
     ~Session() {
         stats.reset();
         gpuTimer.reset();
@@ -246,6 +250,25 @@ void App::renderFrame() {
         const ff::d3d11::Rect src = s.capture->clientRect();
         const ff::d3d11::Rect dst = aspectFit(src, s.swapchain->width(), s.swapchain->height());
         if (src.width && dst.width) {
+            const bool changed = !s.scaleLogged || src.width != s.lastSrcW || src.height != s.lastSrcH ||
+                                 dst.width != s.lastDstW || dst.height != s.lastDstH;
+            if (changed) {
+                s.scaleLogged = true;
+                s.lastSrcW = src.width;
+                s.lastSrcH = src.height;
+                s.lastDstW = dst.width;
+                s.lastDstH = dst.height;
+                s.snapshot.srcW = src.width;
+                s.snapshot.srcH = src.height;
+                s.snapshot.dstW = dst.width;
+                s.snapshot.dstH = dst.height;
+                const double factor = static_cast<double>(dst.width) / static_cast<double>(src.width);
+                Log::write("Scaling %ux%u -> %ux%u (%s, factor %.2fx)", src.width, src.height, dst.width, dst.height,
+                           algoName(m_options.scaler.algorithm), factor);
+                if (dst.width == src.width && dst.height == src.height)
+                    Log::write("Note: source already at output resolution - no upscaling. Run the game windowed at a "
+                               "lower resolution (e.g. 1280x720).");
+            }
             if (timer) timer->beginStage(ctx, ff::d3d11::Stage::Scale);
             auto r = s.scaler->run(ctx, s.capture->srv(), src, s.swapchain->uav(), dst, m_options.scaler);
             if (!r.ok()) Log::write("Scaler::run failed: %s", r.error().c_str());

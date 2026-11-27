@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include <array>
+#include <cstdint>
 
 namespace ffapp {
 
@@ -13,6 +14,8 @@ struct StatsSnapshot {
     bool gpuValid = false;
     std::array<double, 3> gpuMs{}; // Capture, Scale, Overlay
     const char* algorithm = "";
+    // Source (captured client area) and output (aspect-fit) rectangles, in pixels. 0 = unknown.
+    uint32_t srcW = 0, srcH = 0, dstW = 0, dstH = 0;
 };
 
 // Dear ImGui text overlay (top-left, translucent background). Owns the ImGui context.

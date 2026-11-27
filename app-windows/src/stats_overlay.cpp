@@ -62,6 +62,19 @@ void StatsOverlay::render(ID3D11RenderTargetView* rtv, UINT width, UINT height, 
         if (st.gpuValid) ImGui::Text(str::kGpuMs, st.gpuMs[0], st.gpuMs[1], st.gpuMs[2]);
         else ImGui::TextUnformatted(str::kGpuNa);
         ImGui::Text(str::kAlgo, st.algorithm);
+        if (st.srcW && st.srcH && st.dstW && st.dstH) {
+            const double factor = static_cast<double>(st.dstW) / static_cast<double>(st.srcW);
+            if (st.srcW == st.dstW && st.srcH == st.dstH) {
+                // No scaling: show the resolution line in yellow with a hint.
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.85f, 0.2f, 1.0f));
+                ImGui::Text(str::kScale, st.srcW, st.srcH, st.dstW, st.dstH, st.algorithm, factor);
+                ImGui::SameLine(0.0f, 0.0f);
+                ImGui::TextUnformatted(str::kNoUpscaling);
+                ImGui::PopStyleColor();
+            } else {
+                ImGui::Text(str::kScale, st.srcW, st.srcH, st.dstW, st.dstH, st.algorithm, factor);
+            }
+        }
     }
     ImGui::End();
     ImGui::Render();

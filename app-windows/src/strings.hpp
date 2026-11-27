@@ -10,6 +10,8 @@ inline constexpr const char* kCpuMs = "CPU frame   : %.2f ms";
 inline constexpr const char* kGpuMs = "GPU C/S/O   : %.2f / %.2f / %.2f ms";
 inline constexpr const char* kGpuNa = "GPU         : n/a";
 inline constexpr const char* kAlgo = "Algorithm   : %s";
+inline constexpr const char* kScale = "%ux%u -> %ux%u (%s, %.2fx)";
+inline constexpr const char* kNoUpscaling = " (no upscaling)";
 
 inline constexpr const char* kUsage =
     "FreeFrame.exe [--algo nearest|bilinear|fsr1] [--sharpness 0..1] [--target-title <text>]\n"
