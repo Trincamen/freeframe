@@ -1,0 +1,94 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.preset }} (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            preset: windows-msvc
+            cli: build/windows-msvc/cli/Release/freeframe-cli.exe
+          - os: ubuntu-24.04
+            preset: linux-clang
+            cli: build/linux-clang/cli/freeframe-cli
+          - os: ubuntu-24.04
+            preset: linux-gcc
+            cli: build/linux-gcc/cli/freeframe-cli
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build clang
+
+      - name: Setup MSVC environment
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Configure
+        shell: bash
+        run: cmake --preset ${{ matrix.preset }} -DFREEFRAME_WARNINGS_AS_ERRORS=ON
+
+      - name: Build
+        shell: bash
+        run: cmake --build --preset ${{ matrix.preset }} --parallel
+
+      - name: Test
+        shell: bash
+        run: ctest --preset ${{ matrix.preset }}
+
+      - name: CLI smoke test
+        shell: bash
+        run: |
+          CLI="${{ matrix.cli }}"
+
+          # --version deve sair com 0
+          "$CLI" --version || { echo "freeframe-cli --version falhou"; exit 1; }
+
+          # gpus: 0 (GPU listada) ou 1 (nenhuma GPU, com mensagem clara) sao aceitos.
+          # Qualquer outro codigo (crash, codigo negativo, >1) falha o job.
+          set +e
+          "$CLI" gpus
+          rc=$?
+          set -e
+          echo "freeframe-cli gpus saiu com codigo $rc"
+          if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then
+            echo "freeframe-cli gpus terminou de forma anormal (codigo $rc)"
+            exit 1
+          fi
+
+      - name: Check runtime dependencies (dumpbin)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $exe = "${{ matrix.cli }}"
+          $out = & dumpbin /dependents $exe 2>&1 | Out-String
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "dumpbin falhou ao analisar $exe"
+            exit 1
+          }
+          Write-Output $out
+          if ($out -match 'VCRUNTIME|MSVCP') {
+            Write-Error "O executavel depende do runtime do MSVC dinamico (VCRUNTIME/MSVCP). Esperado: runtime estatico (/MT)."
+            exit 1
+          }

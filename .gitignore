@@ -1,0 +1,22 @@
+# Build output
+build/
+out/
+
+# IDE / editor
+.vs/
+.vscode/
+*.user
+CMakeUserPresets.json
+compile_commands.json
+.cache/
+
+# Local data (portable mode)
+data/
+
+# Logs and OS files
+*.log
+Thumbs.db
+.DS_Store
+
+# Local Claude Code settings
+.claude/settings.local.json

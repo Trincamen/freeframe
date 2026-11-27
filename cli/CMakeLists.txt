@@ -1,0 +1,6 @@
+add_executable(freeframe-cli main.cpp)
+target_link_libraries(freeframe-cli PRIVATE FreeFrame::core)
+if(WIN32)
+  target_compile_definitions(freeframe-cli PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+endif()
+freeframe_set_warnings(freeframe-cli)
