@@ -151,8 +151,8 @@ Vamos ter **dois modos de operação** sobre um **núcleo comum**:
   - **Vulkan 1.2+ (compute)** — backend do **Modo B (camada)**, do Linux e alternativo no Windows.
     Carregado via **volk** (o `vulkan-1.dll`/`libvulkan.so.1` do driver é aberto em tempo de
     execução; não precisa do Vulkan SDK para compilar o núcleo).
-- **Shaders em HLSL, fonte única.** Compilados no build com **DXC**: HLSL → DXBC/DXIL (D3D11) e
-  HLSL → SPIR-V (Vulkan). FSR1/CAS/NIS/SGSR já existem em HLSL. Shaders que só existem em GLSL
+- **Shaders em HLSL, fonte única.** Compilados no build: **FXC** (Windows SDK) → DXBC SM 5.0 para o
+  D3D11 (o D3D11 não aceita DXIL) e **DXC** → SPIR-V para o Vulkan. FSR1/CAS/NIS/SGSR já existem em HLSL. Shaders que só existem em GLSL
   (ex.: Anime4K) são portados para HLSL uma vez. O binário compilado é embutido no executável.
 - O interop D3D11↔Vulkan (`VK_KHR_external_memory_win32` + semáforo compartilhado) deixa de ser
   obrigatório e vira opção futura, caso algum backend (ex.: FidelityFX OF em Vulkan) precise dele.
@@ -657,8 +657,10 @@ integração com VR (ver observação na seção 11).
 | # | Data | Decisão | Motivo |
 |---|---|---|---|
 | D1 | 2026-11-26 | Manifesto `asInvoker` + autoelevação via `ShellExecuteExW "runas"`; recusa do UAC → modo limitado. CLI nunca eleva | Com `requireAdministrator`, recusar o UAC impede o processo de iniciar, então o modo limitado seria impossível |
-| D2 | 2026-11-26 | Shaders em **HLSL fonte única**, compilados com DXC para DXBC/DXIL e SPIR-V | FSR1/CAS/NIS/SGSR já são HLSL; torna o backend D3D11 barato |
+| D2 | 2026-11-26 (rev. 11-27) | Shaders em **HLSL fonte única**: FXC → DXBC (D3D11), DXC → SPIR-V (Vulkan) | FSR1/CAS/NIS/SGSR já são HLSL; torna o backend D3D11 barato |
 | D3 | 2026-11-26 | Modo A no Windows usa **backend D3D11** nativo; Vulkan para Modo B/Linux e alternativo no Windows | WGC entrega D3D11; elimina o interop do caminho crítico do M1 |
 | D4 | 2026-11-26 | Vulkan via **Vulkan-Headers + volk** (carregamento dinâmico) | Compila sem Vulkan SDK; CI simples; executável portátil |
 | D5 | 2026-11-26 | xBR: só fonte com licença permissiva verificada ou implementação própria | Muitos shaders xBR do libretro são GPL |
 | D6 | 2026-11-26 | Dependências via **CMake FetchContent** (sem vcpkg por ora); testes com **doctest** | Clonar e compilar sem passos extras; compatível com `/MT` |
+| D7 | 2026-11-27 | CI Windows fixado em `windows-2022` | `windows-latest` passou a ter só o VS 18; o preset usa o gerador VS 17 2022 |
+| D8 | 2026-11-27 | M1: scaler D3D11 em compute shaders escrevendo num UAV `R8G8B8A8_UNORM`; swapchain flip com `DXGI_USAGE_UNORDERED_ACCESS`. Autoelevação (D1) fica para o M2 junto com a bandeja | Mantém o M1 focado em captura → escala → apresentação |

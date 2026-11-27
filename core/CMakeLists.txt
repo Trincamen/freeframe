@@ -9,7 +9,7 @@ add_library(freeframe_core STATIC
   src/vulkan_backend.cpp
 )
 if(WIN32)
-  target_sources(freeframe_core PRIVATE src/dxgi_backend.cpp)
+  target_sources(freeframe_core PRIVATE src/dxgi_backend.cpp src/d3d11/stub.cpp)
 endif()
 add_library(FreeFrame::core ALIAS freeframe_core)
 
@@ -19,7 +19,7 @@ target_include_directories(freeframe_core PUBLIC
 target_compile_features(freeframe_core PUBLIC cxx_std_20)
 target_link_libraries(freeframe_core PRIVATE volk)
 if(WIN32)
-  target_link_libraries(freeframe_core PRIVATE dxgi)
+  target_link_libraries(freeframe_core PRIVATE dxgi PUBLIC d3d11)
   target_compile_definitions(freeframe_core PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
 endif()
 freeframe_set_warnings(freeframe_core)
