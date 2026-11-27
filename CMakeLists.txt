@@ -29,3 +29,8 @@ endif()
 if(WIN32 AND FREEFRAME_BUILD_APP)
   add_subdirectory(app-windows)
 endif()
+
+option(FREEFRAME_BUILD_TOOLS "Build test tools" ON)
+if(WIN32 AND FREEFRAME_BUILD_TOOLS)
+  add_subdirectory(tools/testgame)
+endif()

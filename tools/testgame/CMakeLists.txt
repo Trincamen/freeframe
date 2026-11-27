@@ -1,0 +1,7 @@
+add_executable(freeframe-testgame WIN32 main.cpp)
+target_compile_definitions(freeframe-testgame PRIVATE WIN32_LEAN_AND_MEAN NOMINMAX UNICODE _UNICODE)
+target_link_libraries(freeframe-testgame PRIVATE d3d11 dxgi xinput user32 shell32)
+freeframe_set_warnings(freeframe-testgame)
+if(MSVC)
+  target_compile_options(freeframe-testgame PRIVATE /WX)
+endif()
