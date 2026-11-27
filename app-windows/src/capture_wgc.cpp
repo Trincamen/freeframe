@@ -35,6 +35,8 @@ struct CaptureWgc::Impl {
     wgc::Direct3D11CaptureFramePool pool{nullptr};
     wgc::GraphicsCaptureSession session{nullptr};
     winrt::event_token closedToken{};
+    winrt::event_token arrivedToken{};
+    HANDLE frameEvent = nullptr;
     winrt::Windows::Graphics::SizeInt32 poolSize{};
     winrt::Windows::Graphics::SizeInt32 contentSize{};
     winrt::com_ptr<ID3D11Texture2D> copy;
@@ -47,10 +49,12 @@ CaptureWgc::CaptureWgc() : m(std::make_unique<Impl>()) {}
 CaptureWgc::~CaptureWgc() {
     try {
         if (m->item && m->closedToken.value) m->item.Closed(m->closedToken);
+        if (m->pool && m->arrivedToken.value) m->pool.FrameArrived(m->arrivedToken);
         if (m->session) m->session.Close();
         if (m->pool) m->pool.Close();
     } catch (...) {
     }
+    if (m->frameEvent) CloseHandle(m->frameEvent);
 }
 
 std::unique_ptr<CaptureWgc> CaptureWgc::create(ID3D11Device* device, HWND target, std::string& error) {
@@ -79,6 +83,13 @@ std::unique_ptr<CaptureWgc> CaptureWgc::create(ID3D11Device* device, HWND target
 
         s.pool = wgc::Direct3D11CaptureFramePool::CreateFreeThreaded(
             s.winrtDevice, wgd::DirectXPixelFormat::B8G8R8A8UIntNormalized, 2, s.poolSize);
+        s.frameEvent = CreateEventW(nullptr, FALSE, FALSE, nullptr);
+        if (!s.frameEvent) {
+            error = "CreateEvent failed";
+            return nullptr;
+        }
+        const HANDLE ev = s.frameEvent;
+        s.arrivedToken = s.pool.FrameArrived([ev](auto&&, auto&&) { SetEvent(ev); });
         s.session = s.pool.CreateCaptureSession(s.item);
 
         using winrt::Windows::Foundation::Metadata::ApiInformation;
@@ -146,6 +157,7 @@ bool CaptureWgc::update(ID3D11DeviceContext* ctx) {
     return got;
 }
 
+HANDLE CaptureWgc::frameEvent() const noexcept { return m->frameEvent; }
 ID3D11Texture2D* CaptureWgc::texture() const noexcept { return m->copy.get(); }
 ID3D11ShaderResourceView* CaptureWgc::srv() const noexcept { return m->copySrv.get(); }
 

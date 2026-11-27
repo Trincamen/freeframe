@@ -12,7 +12,6 @@
 #include "overlay_window.hpp"
 #include "stats_overlay.hpp"
 #include "swapchain.hpp"
-#include "temp_device_fallback.hpp"
 
 namespace ffapp {
 
@@ -102,13 +101,15 @@ struct App::Session {
     std::unique_ptr<CaptureWgc> capture;
     std::unique_ptr<OverlayWindow> overlay;
     std::unique_ptr<Swapchain> swapchain;
-    std::unique_ptr<ff::d3d11::Scaler> scaler;       // null -> TEMP copy fallback
+    std::unique_ptr<ff::d3d11::Scaler> scaler;       
     std::unique_ptr<ff::d3d11::GpuTimer> gpuTimer;   // null -> CPU times only
     std::unique_ptr<StatsOverlay> stats;
 
     // Stats window (1 s)
     long long windowStart = 0;
     uint32_t baseFrames = 0, outFrames = 0;
+    bool renderPending = false; // a new frame (or a stats refresh) is waiting for the swapchain waitable
+    long long lastRenderTicks = 0;
     double cpuSeconds = 0;
     StatsSnapshot snapshot;
 
@@ -160,29 +161,21 @@ bool App::startScaling(HWND target) {
     Log::write("Start scaling hwnd=%p title=\"%s\" algo=%s sharpness=%.2f", static_cast<void*>(target),
                toUtf8(title).c_str(), algoName(m_options.scaler.algorithm), m_options.scaler.sharpness);
 
-    // Device: core first, TEMP fallback otherwise.
     auto dev = ff::d3d11::createDevice();
-    if (dev.ok()) {
-        s->dev = std::move(dev.value());
-    } else {
-        Log::write("createDevice failed (%s); using TEMP fallback device", dev.error().c_str());
-        auto fb = tempCreateDeviceFallback(); // TEMP(M1-S2)
-        if (!fb.ok()) {
-            Log::write("Fallback device failed: %s", fb.error().c_str());
-            return false;
-        }
-        s->dev = std::move(fb.value());
+    if (!dev.ok()) {
+        Log::write("Cannot start: D3D11 device creation failed: %s", dev.error().c_str());
+        return false;
     }
+    s->dev = std::move(dev.value());
     ID3D11Device* device = s->dev.device.Get();
     ID3D11DeviceContext* ctx = s->dev.context.Get();
 
-    // Scaler: core first, TEMP unscaled copy otherwise (needs BGRA back buffer without UAV).
     auto sc = ff::d3d11::Scaler::create(device);
-    if (sc.ok()) {
-        s->scaler = std::move(sc.value());
-    } else {
-        Log::write("Scaler::create failed (%s); using TEMP copy fallback", sc.error().c_str());
+    if (!sc.ok()) {
+        Log::write("Cannot start: Scaler::create failed: %s", sc.error().c_str());
+        return false;
     }
+    s->scaler = std::move(sc.value());
     auto timer = ff::d3d11::GpuTimer::create(device);
     if (timer.ok()) s->gpuTimer = std::move(timer.value());
     else Log::write("GpuTimer::create failed (%s); CPU times only", timer.error().c_str());
@@ -207,8 +200,8 @@ bool App::startScaling(HWND target) {
     Swapchain::Config cfg;
     cfg.width = s->overlay->width();
     cfg.height = s->overlay->height();
-    cfg.unorderedAccess = s->scaler != nullptr;
-    cfg.format = s->scaler ? DXGI_FORMAT_R8G8B8A8_UNORM : DXGI_FORMAT_B8G8R8A8_UNORM;
+    cfg.unorderedAccess = true;
+    cfg.format = DXGI_FORMAT_R8G8B8A8_UNORM;
     s->swapchain = Swapchain::create(device, s->overlay->hwnd(), cfg, err);
     if (!s->swapchain) {
         Log::write("Swapchain failed: %s", err.c_str());
@@ -254,16 +247,8 @@ void App::renderFrame() {
         const ff::d3d11::Rect dst = aspectFit(src, s.swapchain->width(), s.swapchain->height());
         if (src.width && dst.width) {
             if (timer) timer->beginStage(ctx, ff::d3d11::Stage::Scale);
-            if (s.scaler) {
-                auto r = s.scaler->run(ctx, s.capture->srv(), src, s.swapchain->uav(), dst, m_options.scaler);
-                if (!r.ok()) Log::write("Scaler::run failed: %s", r.error().c_str());
-                ID3D11UnorderedAccessView* nullUav = nullptr;
-                ctx->CSSetUnorderedAccessViews(0, 1, &nullUav, nullptr);
-                ID3D11ShaderResourceView* nullSrv = nullptr;
-                ctx->CSSetShaderResources(0, 1, &nullSrv);
-            } else {
-                tempCopyCentered(ctx, s.capture->texture(), src, s.swapchain->backBuffer()); // TEMP(M1-S2)
-            }
+            auto r = s.scaler->run(ctx, s.capture->srv(), src, s.swapchain->uav(), dst, m_options.scaler);
+            if (!r.ok()) Log::write("Scaler::run failed: %s", r.error().c_str());
             if (timer) timer->endStage(ctx, ff::d3d11::Stage::Scale);
         }
     }
@@ -276,6 +261,7 @@ void App::renderFrame() {
     if (timer) timer->endFrame(ctx);
 
     s.cpuSeconds += ticksToSeconds(nowTicks() - t0);
+    s.lastRenderTicks = t0;
 
     const HRESULT hr = s.swapchain->present(m_options.vsync);
     ++s.outFrames;
@@ -286,8 +272,11 @@ void App::renderFrame() {
         return;
     }
     if (FAILED(hr)) Log::write("Present failed 0x%08lX", static_cast<unsigned long>(hr));
+}
 
-    // 1 s statistics window.
+void App::flushStats() {
+    Session& s = *m_session;
+    auto* timer = s.gpuTimer.get();
     const double elapsed = ticksToSeconds(nowTicks() - s.windowStart);
     if (elapsed >= 1.0) {
         StatsSnapshot& sn = s.snapshot;
@@ -325,6 +314,7 @@ void App::periodicChecks() {
         if (!IsWindow(t)) stopScaling("target closed");
         else if (IsIconic(t)) stopScaling("target minimized");
         else if (m_session->capture->closed()) stopScaling("capture item closed");
+        else flushStats();
     } else if (m_titlePending) {
         if (HWND h = findWindowByTitle(m_options.targetTitle)) {
             m_titlePending = false;
@@ -345,9 +335,14 @@ int App::run() {
 
     bool quit = false;
     while (!quit) {
-        const HANDLE wait = m_session && m_session->swapchain ? m_session->swapchain->waitable() : nullptr;
-        const DWORD n = wait ? 1u : 0u;
-        const DWORD r = MsgWaitForMultipleObjectsEx(n, wait ? &wait : nullptr, 100, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+        // Wait for a new captured frame first, then for the swapchain waitable before rendering.
+        HANDLE wait = nullptr;
+        if (m_session) {
+            const bool waitSwapchain = m_options.presentEveryVblank || m_session->renderPending;
+            wait = waitSwapchain ? m_session->swapchain->waitable() : m_session->capture->frameEvent();
+        }
+        const DWORD r = MsgWaitForMultipleObjectsEx(wait ? 1u : 0u, wait ? &wait : nullptr, 100, QS_ALLINPUT,
+                                                    MWMO_INPUTAVAILABLE);
 
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -361,13 +356,22 @@ int App::run() {
         if (quit) break;
 
         if (r == WAIT_OBJECT_0 && m_session) {
-            try {
-                renderFrame();
-            } catch (const std::exception& e) {
-                Log::write("Render error: %s", e.what());
-                stopScaling("error");
+            if (m_options.presentEveryVblank || m_session->renderPending) {
+                m_session->renderPending = false;
+                try {
+                    renderFrame();
+                } catch (const std::exception& e) {
+                    Log::write("Render error: %s", e.what());
+                    stopScaling("error");
+                }
+            } else {
+                m_session->renderPending = true; // new frame arrived; now wait for the swapchain
             }
         }
+        // Keep the statistics text alive (~10 Hz) even if the source is static.
+        if (m_session && m_showStats && !m_session->renderPending &&
+            ticksToSeconds(nowTicks() - m_session->lastRenderTicks) >= 0.1)
+            m_session->renderPending = true;
         periodicChecks();
     }
     stopScaling("exit");

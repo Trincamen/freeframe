@@ -22,6 +22,9 @@ public:
     // Pulls the newest frame, if any, into the private texture. Returns true when a new frame was copied.
     bool update(ID3D11DeviceContext* ctx);
 
+    // Auto-reset event signaled by FrameArrived (capture thread) when a new frame is queued.
+    HANDLE frameEvent() const noexcept;
+
     bool hasFrame() const noexcept { return m_hasFrame; }
     bool closed() const noexcept { return m_closed.load(); }
     ID3D11Texture2D* texture() const noexcept;

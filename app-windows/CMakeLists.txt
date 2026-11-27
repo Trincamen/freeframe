@@ -8,7 +8,6 @@ add_executable(FreeFrame WIN32
   src/swapchain.cpp
   src/hotkeys.cpp
   src/stats_overlay.cpp
-  src/temp_device_fallback.cpp
   FreeFrame.manifest)
 target_link_libraries(FreeFrame PRIVATE FreeFrame::core FreeFrame::imgui
   d3d11 dxgi dwmapi windowsapp)

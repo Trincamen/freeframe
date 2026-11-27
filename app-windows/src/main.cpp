@@ -40,6 +40,8 @@ bool parseArgs(Options& o, std::wstring& error) {
             o.exitAfterSeconds = _wtof(argv[++i]);
         } else if (a == L"--log" && hasValue) {
             o.logPath = argv[++i];
+        } else if (a == L"--present-every-vblank") {
+            o.presentEveryVblank = true;
         } else if (a == L"--no-vsync") {
             o.vsync = false;
         } else {

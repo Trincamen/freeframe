@@ -15,6 +15,7 @@ struct Options {
     double exitAfterSeconds = 0; // 0 = run until quit
     std::wstring logPath;
     bool vsync = true;
+    bool presentEveryVblank = false; // old behavior: re-render every swapchain vblank even without a new frame
 };
 
 // Application state machine: Idle <-> Scaling. Everything runs on the main thread.
@@ -36,6 +37,7 @@ private:
     void stopScaling(const char* reason);
     void renderFrame();
     void periodicChecks();
+    void flushStats();
 
     Options m_options;
     std::unique_ptr<Hotkeys> m_hotkeys;
