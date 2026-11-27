@@ -169,7 +169,7 @@ Vamos ter **dois modos de operação** sobre um **núcleo comum**:
   (`WS_EX_LAYERED|WS_EX_TRANSPARENT|WS_EX_NOACTIVATE`), excluída da própria captura
   (`SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE)`), com swapchain flip model
   (`DXGI_SWAP_EFFECT_FLIP_DISCARD`) e tearing opcional.
-- **Cursor:** esconder o cursor real sobre o jogo e desenhar o cursor escalado na saída (P1).
+- **Cursor:** prender o cursor real na área cliente do jogo (`ClipCursor`), esconder o cursor do sistema e desenhar o cursor escalado na saída (**M1**, ver D9). Sem isso o jogo perde o foco e a entrada.
 - **Linux:** captura via **xdg-desktop-portal + PipeWire** (Wayland) ou XComposite (X11). Fica
   para depois, porque no Linux o Modo B é mais natural.
 
@@ -664,3 +664,4 @@ integração com VR (ver observação na seção 11).
 | D6 | 2026-11-26 | Dependências via **CMake FetchContent** (sem vcpkg por ora); testes com **doctest** | Clonar e compilar sem passos extras; compatível com `/MT` |
 | D7 | 2026-11-27 | CI Windows fixado em `windows-2022` | `windows-latest` passou a ter só o VS 18; o preset usa o gerador VS 17 2022 |
 | D8 | 2026-11-27 | M1: scaler D3D11 em compute shaders escrevendo num UAV `R8G8B8A8_UNORM`; swapchain flip com `DXGI_USAGE_UNORDERED_ACCESS`. Autoelevação (D1) fica para o M2 junto com a bandeja | Mantém o M1 focado em captura → escala → apresentação |
+| D9 | 2026-11-27 | Mapeamento de cursor (ClipCursor no client rect do jogo + cursor do sistema escondido via Magnification + cursor desenhado no overlay) sobe de P1 para o **M1**; overlay escondido/pausado quando o jogo perde o foco; atalho Ctrl+Alt+Q para sair | Teste real (Silent Hill 2): sem isso os cliques atravessavam o overlay para a área de trabalho, o jogo perdia o foco e teclado/controle paravam |
