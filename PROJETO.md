@@ -448,6 +448,22 @@ Além do app completo na bandeja, um **painel sobreposto ao jogo**, aberto por a
   ImPlot); botão "Abrir o app completo".
 - Marcos: painel básico (perfil + ajustes ao vivo) no **M2**; gráficos completos no **M4.5**.
 
+## 7D. Recomendações contextuais (regra de UX, vale para todo o projeto)
+
+**Sempre que existir um ajuste que o usuário possa mudar para melhorar algo** (qualidade, FPS, latência,
+estabilidade), o FreeFrame deve (1) **permitir a mudança** (atalho, UI, ao vivo quando possível) e
+(2) **mostrar uma recomendação** explicando o que mudar e por quê. Funcionalidade sem a recomendação
+correspondente é considerada incompleta na revisão.
+- **Motor único no núcleo:** `ff::recommend(SessionContext) → std::vector<Tip>` (`core/include/freeframe/recommendations.hpp`),
+  função pura e testada. Cada `Tip` tem `id` estável (para i18n e "não mostrar de novo"), severidade e texto.
+- **Onde aparece:** overlay de estatísticas e aviso curto (M1); telas de perfil e painel dentro do jogo
+  (M2, 7C); tela de Estatísticas (M4.5), ao lado dos números que motivaram a dica.
+- **Regras iniciais:** fator de escala > 1,5x com FSR1/bilinear (sugerir 1,5x/1,33x com as resoluções exatas);
+  fator 1,0x (sem upscaling); nitidez baixa em ampliação grande; Nearest com fator não inteiro;
+  baixar a resolução não aumentou o FPS (jogo limitado por CPU ou com FPS travado → upscaling não ajuda
+  FPS; sugerir resolução nativa para qualidade ou frame gen); FPS base < 30 com frame gen (artefatos);
+  jogo com upscaler nativo (DLSS/FSR2+/XeSS/TSR) → sugerir usá-lo (quando o perfil souber).
+
 ---
 
 ## 8. Estrutura do repositório e build
@@ -684,3 +700,4 @@ integração com VR (ver observação na seção 11).
 | D8 | 2026-11-27 | M1: scaler D3D11 em compute shaders escrevendo num UAV `R8G8B8A8_UNORM`; swapchain flip com `DXGI_USAGE_UNORDERED_ACCESS`. Autoelevação (D1) fica para o M2 junto com a bandeja | Mantém o M1 focado em captura → escala → apresentação |
 | D9 | 2026-11-27 | Mapeamento de cursor (ClipCursor no client rect do jogo + cursor do sistema escondido via Magnification + cursor desenhado no overlay) sobe de P1 para o **M1**; overlay escondido/pausado quando o jogo perde o foco; atalho Ctrl+Alt+Q para sair | Teste real (Silent Hill 2): sem isso os cliques atravessavam o overlay para a área de trabalho, o jogo perdia o foco e teclado/controle paravam |
 | D10 | 2026-11-27 | Painel dentro do jogo (seção 7C), atalho `Ctrl+Alt+F`; básico no M2, gráficos no M4.5 | Pedido do usuário: acessar config e gráficos do jogo sem sair dele, como nos painéis AMD/NVIDIA |
+| D11 | 2026-11-27 | Recomendações contextuais (seção 7D) como regra permanente; motor `ff::recommend` no núcleo; no M1: dicas no overlay + atalhos para trocar algoritmo e nitidez ao vivo | Pedido do usuário após o teste do SH2 (cabelo serrilhado em 2x, FPS sem ganho por limite de CPU) |

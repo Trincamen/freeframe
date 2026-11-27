@@ -7,6 +7,7 @@ add_library(freeframe_core STATIC
   src/gpu_backend.cpp
   src/format.cpp
   src/vulkan_backend.cpp
+  src/recommendations.cpp
 )
 if(WIN32)
   target_sources(freeframe_core PRIVATE src/dxgi_backend.cpp src/d3d11/device.cpp
