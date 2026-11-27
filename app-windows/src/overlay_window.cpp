@@ -38,6 +38,7 @@ OverlayWindow* OverlayWindow::create(const RECT& monitor) {
     SetLayeredWindowAttributes(hwnd, 0, 255, LWA_ALPHA);
     if (!SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE))
         Log::write("SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE) failed (error %lu)", GetLastError());
+    SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     ShowWindow(hwnd, SW_SHOWNOACTIVATE);
 
     auto* w = new OverlayWindow();

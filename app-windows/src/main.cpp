@@ -42,6 +42,10 @@ bool parseArgs(Options& o, std::wstring& error) {
             o.logPath = argv[++i];
         } else if (a == L"--present-every-vblank") {
             o.presentEveryVblank = true;
+        } else if (a == L"--no-cursor-map") {
+            o.cursorMap = false;
+        } else if (a == L"--cursor-scale" && hasValue) {
+            o.cursorScale = static_cast<float>(_wtof(argv[++i]));
         } else if (a == L"--no-vsync") {
             o.vsync = false;
         } else {

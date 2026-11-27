@@ -42,7 +42,8 @@ void StatsOverlay::shutdown() {
     m_initialized = false;
 }
 
-void StatsOverlay::render(ID3D11RenderTargetView* rtv, UINT width, UINT height, const StatsSnapshot& st) {
+void StatsOverlay::render(ID3D11RenderTargetView* rtv, UINT width, UINT height, const StatsSnapshot& st, bool showStats,
+                           const CursorDraw* cursor) {
     if (!m_initialized) return;
     (void)width;
     (void)height;
@@ -50,6 +51,7 @@ void StatsOverlay::render(ID3D11RenderTargetView* rtv, UINT width, UINT height, 
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
+    if (showStats) {
     ImGui::SetNextWindowPos(ImVec2(12.0f * m_scale, 12.0f * m_scale));
     ImGui::SetNextWindowBgAlpha(0.55f);
     constexpr ImGuiWindowFlags flags = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
@@ -77,6 +79,12 @@ void StatsOverlay::render(ID3D11RenderTargetView* rtv, UINT width, UINT height, 
         }
     }
     ImGui::End();
+    }
+    if (cursor && cursor->srv) {
+        ImGui::GetForegroundDrawList()->AddImage(reinterpret_cast<ImTextureID>(cursor->srv),
+                                                 ImVec2(cursor->x, cursor->y),
+                                                 ImVec2(cursor->x + cursor->w, cursor->y + cursor->h));
+    }
     ImGui::Render();
 
     m_ctx->OMSetRenderTargets(1, &rtv, nullptr);

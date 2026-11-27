@@ -15,6 +15,8 @@ struct Options {
     double exitAfterSeconds = 0; // 0 = run until quit
     std::wstring logPath;
     bool vsync = true;
+    bool cursorMap = true;      // clip + hide real cursor, draw a scaled one on the overlay
+    float cursorScale = 0.0f;   // 0 = same as the scale factor
     bool presentEveryVblank = false; // old behavior: re-render every swapchain vblank even without a new frame
 };
 
@@ -38,6 +40,7 @@ private:
     void renderFrame();
     void periodicChecks();
     void flushStats();
+    bool cursorTick();
 
     Options m_options;
     std::unique_ptr<Hotkeys> m_hotkeys;

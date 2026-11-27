@@ -8,6 +8,7 @@
 #include <stdexcept>
 
 #include "capture_wgc.hpp"
+#include "cursor_map.hpp"
 #include "log.hpp"
 #include "overlay_window.hpp"
 #include "stats_overlay.hpp"
@@ -104,6 +105,15 @@ struct App::Session {
     std::unique_ptr<ff::d3d11::Scaler> scaler;       
     std::unique_ptr<ff::d3d11::GpuTimer> gpuTimer;   // null -> CPU times only
     std::unique_ptr<StatsOverlay> stats;
+    std::unique_ptr<CursorCache> cursorCache;
+    std::unique_ptr<CursorMapper> cursor; // null when --no-cursor-map
+    // Last cursor state that was rendered (to detect movement).
+    POINT lastCursorPos{-1, -1};
+    HCURSOR lastCursor = nullptr;
+    bool lastCursorShowing = false;
+    HWND lastForeground = nullptr; // for diagnostics: logs every foreground change during the session
+    long long startTicks = 0;
+    bool loggedFg1s = false;
 
     // Stats window (1 s)
     long long windowStart = 0;
@@ -118,6 +128,7 @@ struct App::Session {
     uint32_t lastSrcW = 0, lastSrcH = 0, lastDstW = 0, lastDstH = 0;
 
     ~Session() {
+        cursor.reset(); // restore clip + system cursor first
         stats.reset();
         gpuTimer.reset();
         scaler.reset();
@@ -221,6 +232,24 @@ bool App::startScaling(HWND target) {
     }
     s->snapshot.algorithm = algoName(m_options.scaler.algorithm);
     s->windowStart = nowTicks();
+
+    // Keyboard/mouse focus must stay on the target; the overlay never activates.
+    if (GetForegroundWindow() != target) {
+        Log::write("Foreground is not the target; calling SetForegroundWindow");
+        SetForegroundWindow(target);
+    }
+    {
+        wchar_t fgTitle[256] = L"";
+        if (HWND fg = GetForegroundWindow()) GetWindowTextW(fg, fgTitle, 256);
+        Log::write("foreground after start: %s", toUtf8(fgTitle).c_str());
+    }
+    s->lastForeground = GetForegroundWindow();
+    s->startTicks = nowTicks();
+    if (m_options.cursorMap) {
+        s->cursorCache = std::make_unique<CursorCache>(device);
+        s->cursor = std::make_unique<CursorMapper>();
+        s->cursor->start(target);
+    }
     m_session = std::move(s);
     return true;
 }
@@ -246,6 +275,7 @@ void App::renderFrame() {
     const float black[4] = {0, 0, 0, 1};
     ctx->ClearRenderTargetView(s.swapchain->rtv(), black);
 
+    CursorDraw cursorDraw;
     if (s.capture->hasFrame()) {
         const ff::d3d11::Rect src = s.capture->clientRect();
         const ff::d3d11::Rect dst = aspectFit(src, s.swapchain->width(), s.swapchain->height());
@@ -273,12 +303,33 @@ void App::renderFrame() {
             auto r = s.scaler->run(ctx, s.capture->srv(), src, s.swapchain->uav(), dst, m_options.scaler);
             if (!r.ok()) Log::write("Scaler::run failed: %s", r.error().c_str());
             if (timer) timer->endStage(ctx, ff::d3d11::Stage::Scale);
+
+            if (s.cursor && s.cursor->drawVirtualCursor()) {
+                CURSORINFO ci{};
+                ci.cbSize = sizeof ci;
+                POINT origin{};
+                if (GetCursorInfo(&ci) && (ci.flags & CURSOR_SHOWING) && s.cursor->clientOrigin(origin)) {
+                    const double cx = ci.ptScreenPos.x - origin.x, cy = ci.ptScreenPos.y - origin.y;
+                    if (cx >= 0 && cy >= 0 && cx < src.width && cy < src.height) {
+                        if (const CursorSprite* sp = s.cursorCache->get(ci.hCursor)) {
+                            const double scale = static_cast<double>(dst.width) / src.width;
+                            const double cs = m_options.cursorScale > 0.0f ? m_options.cursorScale : scale;
+                            cursorDraw.srv = sp->srv;
+                            cursorDraw.x = static_cast<float>(dst.x + cx * scale - sp->hotX * cs);
+                            cursorDraw.y = static_cast<float>(dst.y + cy * scale - sp->hotY * cs);
+                            cursorDraw.w = static_cast<float>(sp->width * cs);
+                            cursorDraw.h = static_cast<float>(sp->height * cs);
+                        }
+                    }
+                }
+            }
         }
     }
 
-    if (m_showStats && s.stats) {
+    if (s.stats && (m_showStats || cursorDraw.srv)) {
         if (timer) timer->beginStage(ctx, ff::d3d11::Stage::Overlay);
-        s.stats->render(s.swapchain->rtv(), s.swapchain->width(), s.swapchain->height(), s.snapshot);
+        s.stats->render(s.swapchain->rtv(), s.swapchain->width(), s.swapchain->height(), s.snapshot, m_showStats,
+                        cursorDraw.srv ? &cursorDraw : nullptr);
         if (timer) timer->endStage(ctx, ff::d3d11::Stage::Overlay);
     }
     if (timer) timer->endFrame(ctx);
@@ -322,6 +373,22 @@ void App::flushStats() {
     }
 }
 
+bool App::cursorTick() {
+    Session& s = *m_session;
+    if (!s.cursor || !s.cursor->drawVirtualCursor()) return false;
+    CURSORINFO ci{};
+    ci.cbSize = sizeof ci;
+    if (!GetCursorInfo(&ci)) return false;
+    const bool showing = (ci.flags & CURSOR_SHOWING) != 0;
+    const bool changed = showing != s.lastCursorShowing ||
+                         (showing && (ci.ptScreenPos.x != s.lastCursorPos.x || ci.ptScreenPos.y != s.lastCursorPos.y ||
+                                      ci.hCursor != s.lastCursor));
+    s.lastCursorShowing = showing;
+    s.lastCursorPos = ci.ptScreenPos;
+    s.lastCursor = ci.hCursor;
+    return changed;
+}
+
 void App::periodicChecks() {
     const long long now = nowTicks();
     if (ticksToSeconds(now - m_lastCheckTicks) < 0.1) return;
@@ -337,7 +404,26 @@ void App::periodicChecks() {
         if (!IsWindow(t)) stopScaling("target closed");
         else if (IsIconic(t)) stopScaling("target minimized");
         else if (m_session->capture->closed()) stopScaling("capture item closed");
-        else flushStats();
+        else {
+            Session& ss = *m_session;
+            const HWND fg = GetForegroundWindow();
+            if (fg != ss.lastForeground) {
+                wchar_t ft[256] = L"";
+                if (fg) GetWindowTextW(fg, ft, 256);
+                Log::write("foreground changed: hwnd=%p \"%s\"%s", static_cast<void*>(fg), toUtf8(ft).c_str(),
+                           fg == ss.overlay->hwnd() ? " (OVERLAY!)" : "");
+                ss.lastForeground = fg;
+            }
+            if (!ss.loggedFg1s && ticksToSeconds(now - ss.startTicks) >= 1.0) {
+                ss.loggedFg1s = true;
+                wchar_t ft[256] = L"";
+                if (fg) GetWindowTextW(fg, ft, 256);
+                Log::write("foreground +1s: %s (target is foreground: %s)", toUtf8(ft).c_str(),
+                           fg == ss.target ? "yes" : "no");
+            }
+            if (m_session->cursor) m_session->cursor->update();
+            flushStats();
+        }
     } else if (m_titlePending) {
         if (HWND h = findWindowByTitle(m_options.targetTitle)) {
             m_titlePending = false;
@@ -364,8 +450,10 @@ int App::run() {
             const bool waitSwapchain = m_options.presentEveryVblank || m_session->renderPending;
             wait = waitSwapchain ? m_session->swapchain->waitable() : m_session->capture->frameEvent();
         }
-        const DWORD r = MsgWaitForMultipleObjectsEx(wait ? 1u : 0u, wait ? &wait : nullptr, 100, QS_ALLINPUT,
-                                                    MWMO_INPUTAVAILABLE);
+        // Poll the cursor at ~250 Hz while the virtual cursor is active.
+        const bool pollCursor = m_session && m_session->cursor && m_session->cursor->drawVirtualCursor();
+        const DWORD r = MsgWaitForMultipleObjectsEx(wait ? 1u : 0u, wait ? &wait : nullptr, pollCursor ? 4u : 100u,
+                                                    QS_ALLINPUT, MWMO_INPUTAVAILABLE);
 
         MSG msg;
         while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -391,6 +479,7 @@ int App::run() {
                 m_session->renderPending = true; // new frame arrived; now wait for the swapchain
             }
         }
+        if (m_session && !m_session->renderPending && cursorTick()) m_session->renderPending = true;
         // Keep the statistics text alive (~10 Hz) even if the source is static.
         if (m_session && m_showStats && !m_session->renderPending &&
             ticksToSeconds(nowTicks() - m_session->lastRenderTicks) >= 0.1)
