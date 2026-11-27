@@ -89,7 +89,7 @@ std::vector<Tip> recommend(const SessionContext& ctx) {
         *ctx.higherResSrcHeight > ctx.srcHeight && ctx.baseFps > 0.0 &&
         ctx.baseFps <= *ctx.higherResBaseFps * 1.10) {
         std::snprintf(buf, sizeof(buf),
-            "Lowering the resolution from %up to %up did not raise FPS (%.0f \xE2\x86\x92 %.0f fps): "
+            "Lowering the resolution from %up to %up did not raise FPS (%.0f -> %.0f fps): "
             "the game is CPU-limited or FPS-capped. Upscaling will not increase FPS here; "
             "play at native resolution for best quality, or use frame generation.",
             static_cast<unsigned>(*ctx.higherResSrcHeight), static_cast<unsigned>(ctx.srcHeight),
