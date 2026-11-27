@@ -21,7 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2022
             preset: windows-msvc
             cli: build/windows-msvc/cli/Release/freeframe-cli.exe
           - os: ubuntu-24.04
