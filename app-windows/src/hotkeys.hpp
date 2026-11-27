@@ -5,7 +5,7 @@
 
 namespace ffapp {
 
-enum class HotkeyAction { ToggleScaling, ToggleStats, Quit };
+enum class HotkeyAction { ToggleScaling, ToggleStats, Quit, CycleAlgorithm, SharpnessUp, SharpnessDown };
 
 // Hidden message-only window that owns the global hotkeys (Ctrl+Alt+S, Ctrl+Alt+O, Ctrl+Alt+Q).
 class Hotkeys {

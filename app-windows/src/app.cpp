@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <map>
+#include <set>
 #include <stdexcept>
 
 #include "capture_wgc.hpp"
@@ -12,6 +14,7 @@
 #include "log.hpp"
 #include "overlay_window.hpp"
 #include "stats_overlay.hpp"
+#include "strings.hpp"
 #include "swapchain.hpp"
 
 namespace ffapp {
@@ -39,6 +42,24 @@ const char* algoName(ff::d3d11::ScaleAlgorithm a) {
     case ff::d3d11::ScaleAlgorithm::Fsr1: return "fsr1";
     }
     return "?";
+}
+
+const char* algoDisplayName(ff::d3d11::ScaleAlgorithm a) {
+    switch (a) {
+    case ff::d3d11::ScaleAlgorithm::Nearest: return str::kAlgoNearest;
+    case ff::d3d11::ScaleAlgorithm::Bilinear: return str::kAlgoBilinear;
+    case ff::d3d11::ScaleAlgorithm::Fsr1: return str::kAlgoFsr1;
+    }
+    return "?";
+}
+
+ff::AlgorithmKind algoKind(ff::d3d11::ScaleAlgorithm a) {
+    switch (a) {
+    case ff::d3d11::ScaleAlgorithm::Nearest: return ff::AlgorithmKind::Nearest;
+    case ff::d3d11::ScaleAlgorithm::Bilinear: return ff::AlgorithmKind::Bilinear;
+    case ff::d3d11::ScaleAlgorithm::Fsr1: return ff::AlgorithmKind::Fsr1;
+    }
+    return ff::AlgorithmKind::Other;
 }
 
 bool isOwnWindow(HWND h) {
@@ -113,6 +134,20 @@ struct App::Session {
     bool lastCursorShowing = false;
     HWND lastForeground = nullptr; // for diagnostics: logs every foreground change during the session
     long long startTicks = 0;
+    // Transient notices
+    long long toastSettingsUntil = 0, toastTipUntil = 0;
+    std::string toastSettingsText, toastTipText;
+    bool toastShown = false; // a toast was drawn by the last render (one more render is needed to clear it)
+    // Tips
+    std::set<std::string> shownTips;
+    // Average base FPS per source height (windows of 1 s, fps > 0, after 3 s on that resolution)
+    struct FpsAcc {
+        double sum = 0;
+        int count = 0;
+    };
+    std::map<uint32_t, FpsAcc> fpsByHeight;
+    uint32_t curHeight = 0;
+    long long curHeightSince = 0;
     bool paused = false; // target lost focus: overlay hidden, nothing rendered
     bool loggedFg1s = false;
 
@@ -158,6 +193,29 @@ void App::onHotkey(HotkeyAction action) {
         stopScaling("quit");
         restoreCursorStateGlobal();
         PostQuitMessage(0);
+        return;
+    }
+    if (action == HotkeyAction::CycleAlgorithm || action == HotkeyAction::SharpnessUp ||
+        action == HotkeyAction::SharpnessDown) {
+        auto& cfg = m_options.scaler;
+        char toast[64];
+        if (action == HotkeyAction::CycleAlgorithm) {
+            using A = ff::d3d11::ScaleAlgorithm;
+            cfg.algorithm = cfg.algorithm == A::Nearest ? A::Bilinear : (cfg.algorithm == A::Bilinear ? A::Fsr1 : A::Nearest);
+            Log::write("Algorithm changed to %s", algoName(cfg.algorithm));
+            snprintf(toast, sizeof toast, str::kToastAlgo, algoDisplayName(cfg.algorithm));
+            if (m_session) m_session->snapshot.algorithm = algoName(cfg.algorithm);
+        } else {
+            const float delta = action == HotkeyAction::SharpnessUp ? 0.1f : -0.1f;
+            cfg.sharpness = std::clamp(std::round((cfg.sharpness + delta) * 10.0f) / 10.0f, 0.0f, 1.0f);
+            Log::write("Sharpness changed to %.1f", cfg.sharpness);
+            snprintf(toast, sizeof toast, str::kToastSharp, cfg.sharpness);
+        }
+        if (m_session) {
+            m_session->toastSettingsText = toast;
+            m_session->toastSettingsUntil = nowTicks() + static_cast<long long>(2.5 / ticksToSeconds(1));
+            m_session->renderPending = true;
+        }
         return;
     }
     if (action == HotkeyAction::ToggleStats) {
@@ -335,12 +393,19 @@ void App::renderFrame() {
         }
     }
 
-    if (s.stats && (m_showStats || cursorDraw.srv)) {
+    {
+        const long long now = nowTicks();
+        s.snapshot.toastSettings = now < s.toastSettingsUntil ? s.toastSettingsText : std::string();
+        s.snapshot.toastTip = now < s.toastTipUntil ? s.toastTipText : std::string();
+    }
+    const bool toastNow = !s.snapshot.toastSettings.empty() || !s.snapshot.toastTip.empty();
+    if (s.stats && (m_showStats || cursorDraw.srv || toastNow)) {
         if (timer) timer->beginStage(ctx, ff::d3d11::Stage::Overlay);
         s.stats->render(s.swapchain->rtv(), s.swapchain->width(), s.swapchain->height(), s.snapshot, m_showStats,
                         cursorDraw.srv ? &cursorDraw : nullptr);
         if (timer) timer->endStage(ctx, ff::d3d11::Stage::Overlay);
     }
+    s.toastShown = toastNow;
     if (timer) timer->endFrame(ctx);
 
     s.cpuSeconds += ticksToSeconds(nowTicks() - t0);
@@ -355,6 +420,50 @@ void App::renderFrame() {
         return;
     }
     if (FAILED(hr)) Log::write("Present failed 0x%08lX", static_cast<unsigned long>(hr));
+}
+
+void App::updateTips(StatsSnapshot& sn) {
+    Session& s = *m_session;
+    if (sn.srcW == 0 || sn.srcH == 0) return;
+    const long long now = nowTicks();
+    if (sn.srcH != s.curHeight) {
+        s.curHeight = sn.srcH;
+        s.curHeightSince = now;
+    } else if (sn.baseFps > 0.0 && ticksToSeconds(now - s.curHeightSince) >= 3.0) {
+        auto& acc = s.fpsByHeight[sn.srcH];
+        acc.sum += sn.baseFps;
+        ++acc.count;
+    }
+
+    ff::SessionContext ctx;
+    ctx.srcWidth = sn.srcW;
+    ctx.srcHeight = sn.srcH;
+    ctx.dstWidth = sn.dstW;
+    ctx.dstHeight = sn.dstH;
+    ctx.monitorWidth = s.swapchain->width();
+    ctx.monitorHeight = s.swapchain->height();
+    ctx.algorithm = algoKind(m_options.scaler.algorithm);
+    ctx.sharpness = m_options.scaler.sharpness;
+    ctx.baseFps = sn.baseFps;
+    ctx.frameGenEnabled = false;
+    for (auto it = s.fpsByHeight.rbegin(); it != s.fpsByHeight.rend(); ++it) {
+        if (it->first > sn.srcH && it->second.count > 0) {
+            ctx.higherResBaseFps = it->second.sum / it->second.count;
+            ctx.higherResSrcHeight = it->first;
+            break;
+        }
+    }
+    sn.tips = ff::recommend(ctx);
+
+    for (const ff::Tip& tip : sn.tips) {
+        if (!s.shownTips.insert(tip.id).second) continue;
+        Log::write("Tip [%s]: %s", tip.id.c_str(), tip.text.c_str());
+        if (tip.severity != ff::TipSeverity::Info) {
+            s.toastTipText = tip.text + str::kTipHint;
+            s.toastTipUntil = now + static_cast<long long>(6.0 / ticksToSeconds(1));
+            s.renderPending = true;
+        }
+    }
 }
 
 void App::flushStats() {
@@ -376,6 +485,7 @@ void App::flushStats() {
                        sn.baseFps, sn.outFps, sn.cpuMs, sn.gpuMs[0], sn.gpuMs[1], sn.gpuMs[2]);
         else
             Log::write("base %.1f fps | out %.1f fps | cpu %.2f ms | gpu n/a", sn.baseFps, sn.outFps, sn.cpuMs);
+        updateTips(sn);
         s.windowStart = nowTicks();
         s.baseFrames = s.outFrames = 0;
         s.cpuSeconds = 0;
@@ -479,7 +589,7 @@ void App::periodicChecks() {
 }
 
 int App::run() {
-    Log::write("FreeFrame started (Ctrl+Alt+S: toggle scaling, Ctrl+Alt+O: toggle statistics, Ctrl+Alt+Q: quit)");
+    Log::write("FreeFrame started (Ctrl+Alt+S: toggle scaling, Ctrl+Alt+O: statistics, Ctrl+Alt+A: algorithm, Ctrl+Alt+Up/Down: sharpness, Ctrl+Alt+Q: quit)");
     m_titlePending = !m_options.targetTitle.empty();
     if (m_titlePending && m_options.exitAfterSeconds <= 0)
         Log::write("Waiting for a window titled \"%s\"", toUtf8(m_options.targetTitle).c_str());
@@ -525,7 +635,9 @@ int App::run() {
         if (m_session) focusTick();
         if (m_session && !m_session->paused && !m_session->renderPending && cursorTick()) m_session->renderPending = true;
         // Keep the statistics text alive (~10 Hz) even if the source is static.
-        if (m_session && !m_session->paused && m_showStats && !m_session->renderPending &&
+        if (m_session && !m_session->paused && (m_showStats || m_session->toastShown ||
+                                                 nowTicks() < std::max(m_session->toastSettingsUntil, m_session->toastTipUntil)) &&
+            !m_session->renderPending &&
             ticksToSeconds(nowTicks() - m_session->lastRenderTicks) >= 0.1)
             m_session->renderPending = true;
         periodicChecks();

@@ -45,12 +45,29 @@ void StatsOverlay::shutdown() {
 void StatsOverlay::render(ID3D11RenderTargetView* rtv, UINT width, UINT height, const StatsSnapshot& st, bool showStats,
                            const CursorDraw* cursor) {
     if (!m_initialized) return;
-    (void)width;
     (void)height;
     ImGui_ImplDX11_NewFrame();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
 
+    // Toasts (top center), independent of the statistics visibility.
+    if (!st.toastSettings.empty() || !st.toastTip.empty()) {
+        ImGui::SetNextWindowPos(ImVec2(static_cast<float>(width) * 0.5f, 12.0f * m_scale), ImGuiCond_Always,
+                                ImVec2(0.5f, 0.0f));
+        ImGui::SetNextWindowBgAlpha(0.75f);
+        constexpr ImGuiWindowFlags tf = ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoInputs |
+                                        ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoSavedSettings |
+                                        ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoFocusOnAppearing;
+        if (ImGui::Begin("##ffToast", nullptr, tf)) {
+            if (!st.toastSettings.empty()) ImGui::TextUnformatted(st.toastSettings.c_str());
+            if (!st.toastTip.empty()) {
+                ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 520.0f * m_scale);
+                ImGui::TextColored(ImVec4(1.0f, 0.8f, 0.3f, 1.0f), "%s", st.toastTip.c_str());
+                ImGui::PopTextWrapPos();
+            }
+        }
+        ImGui::End();
+    }
     if (showStats) {
     ImGui::SetNextWindowPos(ImVec2(12.0f * m_scale, 12.0f * m_scale));
     ImGui::SetNextWindowBgAlpha(0.55f);
@@ -76,6 +93,20 @@ void StatsOverlay::render(ID3D11RenderTargetView* rtv, UINT width, UINT height, 
             } else {
                 ImGui::Text(str::kScale, st.srcW, st.srcH, st.dstW, st.dstH, st.algorithm, factor);
             }
+        }
+        if (!st.tips.empty()) {
+            ImGui::Separator();
+            ImGui::TextUnformatted(str::kTipsHeader);
+            ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 520.0f * m_scale);
+            int shown = 0;
+            for (const ff::Tip& tip : st.tips) {
+                if (shown++ >= 3) break;
+                ImVec4 col(0.7f, 0.7f, 0.7f, 1.0f);
+                if (tip.severity == ff::TipSeverity::Warning) col = ImVec4(1.0f, 0.65f, 0.2f, 1.0f);
+                else if (tip.severity == ff::TipSeverity::Suggestion) col = ImVec4(0.55f, 0.8f, 1.0f, 1.0f);
+                ImGui::TextColored(col, "- %s", tip.text.c_str());
+            }
+            ImGui::PopTextWrapPos();
         }
     }
     ImGui::End();

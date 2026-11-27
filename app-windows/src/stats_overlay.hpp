@@ -4,6 +4,10 @@
 
 #include <array>
 #include <cstdint>
+#include <string>
+#include <vector>
+
+#include "freeframe/recommendations.hpp"
 
 namespace ffapp {
 
@@ -16,6 +20,9 @@ struct StatsSnapshot {
     const char* algorithm = "";
     // Source (captured client area) and output (aspect-fit) rectangles, in pixels. 0 = unknown.
     uint32_t srcW = 0, srcH = 0, dstW = 0, dstH = 0;
+    std::vector<ff::Tip> tips; // shown in the "Tips" section (up to 3)
+    // Transient notices (top center); empty = not shown. Drawn even when statistics are hidden.
+    std::string toastSettings, toastTip;
 };
 
 // Cursor sprite to draw on top of everything (screen pixels of the overlay).

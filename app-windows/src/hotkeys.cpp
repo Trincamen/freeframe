@@ -8,6 +8,9 @@ namespace {
 constexpr int kIdToggleScaling = 1;
 constexpr int kIdToggleStats = 2;
 constexpr int kIdQuit = 3;
+constexpr int kIdCycleAlgo = 4;
+constexpr int kIdSharpUp = 5;
+constexpr int kIdSharpDown = 6;
 constexpr wchar_t kClass[] = L"FreeFrameMessageWindow";
 } // namespace
 
@@ -29,6 +32,12 @@ Hotkeys::Hotkeys(std::function<void(HotkeyAction)> callback) : m_callback(std::m
         Log::write("RegisterHotKey Ctrl+Alt+O failed (error %lu)", GetLastError());
     if (!RegisterHotKey(m_hwnd, kIdQuit, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'Q'))
         Log::write("RegisterHotKey Ctrl+Alt+Q failed (error %lu)", GetLastError());
+    if (!RegisterHotKey(m_hwnd, kIdCycleAlgo, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'A'))
+        Log::write("RegisterHotKey Ctrl+Alt+A failed (error %lu)", GetLastError());
+    if (!RegisterHotKey(m_hwnd, kIdSharpUp, MOD_CONTROL | MOD_ALT, VK_UP))
+        Log::write("RegisterHotKey Ctrl+Alt+Up failed (error %lu)", GetLastError());
+    if (!RegisterHotKey(m_hwnd, kIdSharpDown, MOD_CONTROL | MOD_ALT, VK_DOWN))
+        Log::write("RegisterHotKey Ctrl+Alt+Down failed (error %lu)", GetLastError());
 }
 
 Hotkeys::~Hotkeys() {
@@ -36,6 +45,9 @@ Hotkeys::~Hotkeys() {
         UnregisterHotKey(m_hwnd, kIdToggleScaling);
         UnregisterHotKey(m_hwnd, kIdToggleStats);
         UnregisterHotKey(m_hwnd, kIdQuit);
+        UnregisterHotKey(m_hwnd, kIdCycleAlgo);
+        UnregisterHotKey(m_hwnd, kIdSharpUp);
+        UnregisterHotKey(m_hwnd, kIdSharpDown);
         DestroyWindow(m_hwnd);
     }
     UnregisterClassW(kClass, GetModuleHandleW(nullptr));
@@ -51,6 +63,9 @@ LRESULT CALLBACK Hotkeys::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (wp == kIdToggleScaling) self->m_callback(HotkeyAction::ToggleScaling);
             else if (wp == kIdToggleStats) self->m_callback(HotkeyAction::ToggleStats);
             else if (wp == kIdQuit) self->m_callback(HotkeyAction::Quit);
+            else if (wp == kIdCycleAlgo) self->m_callback(HotkeyAction::CycleAlgorithm);
+            else if (wp == kIdSharpUp) self->m_callback(HotkeyAction::SharpnessUp);
+            else if (wp == kIdSharpDown) self->m_callback(HotkeyAction::SharpnessDown);
         }
         return 0;
     }

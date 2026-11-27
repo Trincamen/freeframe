@@ -6,6 +6,7 @@
 
 #include "freeframe/d3d11/scaler.hpp"
 #include "hotkeys.hpp"
+#include "stats_overlay.hpp"
 
 namespace ffapp {
 
@@ -42,6 +43,7 @@ private:
     void flushStats();
     bool cursorTick();
     void focusTick();
+    void updateTips(StatsSnapshot& sn);
 
     Options m_options;
     std::unique_ptr<Hotkeys> m_hotkeys;
