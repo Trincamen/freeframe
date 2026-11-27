@@ -7,6 +7,7 @@ namespace ffapp {
 namespace {
 constexpr int kIdToggleScaling = 1;
 constexpr int kIdToggleStats = 2;
+constexpr int kIdQuit = 3;
 constexpr wchar_t kClass[] = L"FreeFrameMessageWindow";
 } // namespace
 
@@ -26,12 +27,15 @@ Hotkeys::Hotkeys(std::function<void(HotkeyAction)> callback) : m_callback(std::m
         Log::write("RegisterHotKey Ctrl+Alt+S failed (error %lu)", GetLastError());
     if (!RegisterHotKey(m_hwnd, kIdToggleStats, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'O'))
         Log::write("RegisterHotKey Ctrl+Alt+O failed (error %lu)", GetLastError());
+    if (!RegisterHotKey(m_hwnd, kIdQuit, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 'Q'))
+        Log::write("RegisterHotKey Ctrl+Alt+Q failed (error %lu)", GetLastError());
 }
 
 Hotkeys::~Hotkeys() {
     if (m_hwnd) {
         UnregisterHotKey(m_hwnd, kIdToggleScaling);
         UnregisterHotKey(m_hwnd, kIdToggleStats);
+        UnregisterHotKey(m_hwnd, kIdQuit);
         DestroyWindow(m_hwnd);
     }
     UnregisterClassW(kClass, GetModuleHandleW(nullptr));
@@ -46,6 +50,7 @@ LRESULT CALLBACK Hotkeys::wndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (self && self->m_callback) {
             if (wp == kIdToggleScaling) self->m_callback(HotkeyAction::ToggleScaling);
             else if (wp == kIdToggleStats) self->m_callback(HotkeyAction::ToggleStats);
+            else if (wp == kIdQuit) self->m_callback(HotkeyAction::Quit);
         }
         return 0;
     }

@@ -41,6 +41,7 @@ private:
     void periodicChecks();
     void flushStats();
     bool cursorTick();
+    void focusTick();
 
     Options m_options;
     std::unique_ptr<Hotkeys> m_hotkeys;

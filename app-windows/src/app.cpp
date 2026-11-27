@@ -113,6 +113,7 @@ struct App::Session {
     bool lastCursorShowing = false;
     HWND lastForeground = nullptr; // for diagnostics: logs every foreground change during the session
     long long startTicks = 0;
+    bool paused = false; // target lost focus: overlay hidden, nothing rendered
     bool loggedFg1s = false;
 
     // Stats window (1 s)
@@ -144,6 +145,7 @@ struct App::Session {
 
 App::App(Options options) : m_options(std::move(options)) {
     m_startTicks = m_lastCheckTicks = nowTicks();
+    recoverCursorStateIfNeeded();
     m_hotkeys = std::make_unique<Hotkeys>([this](HotkeyAction a) { onHotkey(a); });
     if (!m_hotkeys->ok()) throw std::runtime_error("cannot create message window");
 }
@@ -151,6 +153,13 @@ App::App(Options options) : m_options(std::move(options)) {
 App::~App() { stopScaling("shutdown"); }
 
 void App::onHotkey(HotkeyAction action) {
+    if (action == HotkeyAction::Quit) {
+        Log::write("Quit hotkey pressed");
+        stopScaling("quit");
+        restoreCursorStateGlobal();
+        PostQuitMessage(0);
+        return;
+    }
     if (action == HotkeyAction::ToggleStats) {
         m_showStats = !m_showStats;
         Log::write("Statistics overlay %s", m_showStats ? "on" : "off");
@@ -373,6 +382,39 @@ void App::flushStats() {
     }
 }
 
+void App::focusTick() {
+    Session& s = *m_session;
+    const HWND fg = GetForegroundWindow();
+    if (!fg || fg == s.overlay->hwnd()) return; // transitional states
+    const bool focused = fg == s.target || GetAncestor(fg, GA_ROOTOWNER) == s.target;
+    if (!s.paused && !focused) {
+        s.paused = true;
+        s.renderPending = false;
+        ShowWindow(s.overlay->hwnd(), SW_HIDE);
+        if (s.cursor) s.cursor->update(); // releases clip + restores the system cursor
+        wchar_t ft[256] = L"";
+        GetWindowTextW(fg, ft, 256);
+        Log::write("Paused (target lost focus: %s)", toUtf8(ft).c_str());
+    } else if (s.paused && focused) {
+        // Render first (hidden), then show, so the stale back buffer is never visible.
+        try {
+            renderFrame();
+        } catch (const std::exception& e) {
+            Log::write("Render error: %s", e.what());
+            stopScaling("error");
+            return;
+        }
+        if (!m_session) return;
+        s.paused = false;
+        SetWindowPos(s.overlay->hwnd(), HWND_TOPMOST, 0, 0, 0, 0,
+                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        ShowWindow(s.overlay->hwnd(), SW_SHOWNOACTIVATE);
+        if (s.cursor) s.cursor->update();
+        s.renderPending = true;
+        Log::write("Resumed");
+    }
+}
+
 bool App::cursorTick() {
     Session& s = *m_session;
     if (!s.cursor || !s.cursor->drawVirtualCursor()) return false;
@@ -437,7 +479,7 @@ void App::periodicChecks() {
 }
 
 int App::run() {
-    Log::write("FreeFrame started (Ctrl+Alt+S: toggle scaling, Ctrl+Alt+O: toggle statistics)");
+    Log::write("FreeFrame started (Ctrl+Alt+S: toggle scaling, Ctrl+Alt+O: toggle statistics, Ctrl+Alt+Q: quit)");
     m_titlePending = !m_options.targetTitle.empty();
     if (m_titlePending && m_options.exitAfterSeconds <= 0)
         Log::write("Waiting for a window titled \"%s\"", toUtf8(m_options.targetTitle).c_str());
@@ -448,11 +490,12 @@ int App::run() {
         HANDLE wait = nullptr;
         if (m_session) {
             const bool waitSwapchain = m_options.presentEveryVblank || m_session->renderPending;
-            wait = waitSwapchain ? m_session->swapchain->waitable() : m_session->capture->frameEvent();
+            if (m_session->paused) wait = nullptr;
+            else wait = waitSwapchain ? m_session->swapchain->waitable() : m_session->capture->frameEvent();
         }
         // Poll the cursor at ~250 Hz while the virtual cursor is active.
-        const bool pollCursor = m_session && m_session->cursor && m_session->cursor->drawVirtualCursor();
-        const DWORD r = MsgWaitForMultipleObjectsEx(wait ? 1u : 0u, wait ? &wait : nullptr, pollCursor ? 4u : 100u,
+        const bool pollCursor = m_session && !m_session->paused && m_session->cursor && m_session->cursor->drawVirtualCursor();
+        const DWORD r = MsgWaitForMultipleObjectsEx(wait ? 1u : 0u, wait ? &wait : nullptr, pollCursor ? 4u : (m_session && m_session->paused ? 30u : 100u),
                                                     QS_ALLINPUT, MWMO_INPUTAVAILABLE);
 
         MSG msg;
@@ -466,7 +509,7 @@ int App::run() {
         }
         if (quit) break;
 
-        if (r == WAIT_OBJECT_0 && m_session) {
+        if (wait && r == WAIT_OBJECT_0 && m_session) {
             if (m_options.presentEveryVblank || m_session->renderPending) {
                 m_session->renderPending = false;
                 try {
@@ -479,9 +522,10 @@ int App::run() {
                 m_session->renderPending = true; // new frame arrived; now wait for the swapchain
             }
         }
-        if (m_session && !m_session->renderPending && cursorTick()) m_session->renderPending = true;
+        if (m_session) focusTick();
+        if (m_session && !m_session->paused && !m_session->renderPending && cursorTick()) m_session->renderPending = true;
         // Keep the statistics text alive (~10 Hz) even if the source is static.
-        if (m_session && m_showStats && !m_session->renderPending &&
+        if (m_session && !m_session->paused && m_showStats && !m_session->renderPending &&
             ticksToSeconds(nowTicks() - m_session->lastRenderTicks) >= 0.1)
             m_session->renderPending = true;
         periodicChecks();

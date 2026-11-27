@@ -63,5 +63,7 @@ private:
 // Idempotent last-resort restore (clip + system cursor); used by atexit / unhandled-exception handlers.
 void restoreCursorStateGlobal();
 void installCursorSafetyNet();
+// If a previous instance died with the cursor clipped/hidden (lock file present), repairs it. Returns true if so.
+bool recoverCursorStateIfNeeded();
 
 } // namespace ffapp

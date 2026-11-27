@@ -17,6 +17,6 @@ inline constexpr const char* kUsage =
     "FreeFrame.exe [--algo nearest|bilinear|fsr1] [--sharpness 0..1] [--target-title <text>]\n"
     "              [--exit-after <seconds>] [--log <file>] [--no-vsync] [--present-every-vblank]\n"
     "              [--no-cursor-map] [--cursor-scale <f>]\n"
-    "Hotkeys: Ctrl+Alt+S start/stop scaling the foreground window, Ctrl+Alt+O toggle statistics.";
+    "Hotkeys: Ctrl+Alt+S start/stop scaling the foreground window, Ctrl+Alt+O toggle statistics, Ctrl+Alt+Q quit.";
 
 } // namespace ffapp::str

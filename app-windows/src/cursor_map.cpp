@@ -16,6 +16,26 @@ std::atomic<bool> g_clipped{false};
 std::atomic<bool> g_hidden{false};
 std::atomic<bool> g_magInit{false};
 
+std::wstring lockPath() {
+    wchar_t tmp[MAX_PATH + 1];
+    const DWORD n = GetTempPathW(MAX_PATH, tmp);
+    if (n == 0 || n > MAX_PATH) return {};
+    return std::wstring(tmp, n) + L"freeframe-cursor.lock";
+}
+
+void createLock() {
+    const std::wstring p = lockPath();
+    if (p.empty()) return;
+    HANDLE h = CreateFileW(p.c_str(), GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr,
+                           CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL | FILE_ATTRIBUTE_TEMPORARY, nullptr);
+    if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+}
+
+void removeLock() {
+    const std::wstring p = lockPath();
+    if (!p.empty()) DeleteFileW(p.c_str());
+}
+
 LONG WINAPI unhandledFilter(EXCEPTION_POINTERS*) {
     restoreCursorStateGlobal();
     return EXCEPTION_CONTINUE_SEARCH;
@@ -40,6 +60,20 @@ void restoreCursorStateGlobal() {
     if (g_clipped.exchange(false)) ClipCursor(nullptr);
     if (g_hidden.exchange(false)) MagShowSystemCursor(TRUE);
     if (g_magInit.exchange(false)) MagUninitialize();
+    removeLock();
+}
+
+bool recoverCursorStateIfNeeded() {
+    const std::wstring p = lockPath();
+    if (p.empty() || GetFileAttributesW(p.c_str()) == INVALID_FILE_ATTRIBUTES) return false;
+    ClipCursor(nullptr);
+    if (MagInitialize()) {
+        MagShowSystemCursor(TRUE);
+        MagUninitialize();
+    }
+    DeleteFileW(p.c_str());
+    Log::write("Recovered cursor state from previous unclean exit");
+    return true;
 }
 
 void installCursorSafetyNet() {
@@ -91,6 +125,7 @@ void CursorMapper::engage(const RECT& r) {
                 Log::write("Cursor clip applied (%ld,%ld)-(%ld,%ld)", r.left, r.top, r.right, r.bottom);
             m_clipped = true;
             g_clipped = true;
+            createLock();
             m_rect = r;
         } else {
             Log::write("ClipCursor failed (error %lu)", GetLastError());
@@ -100,6 +135,7 @@ void CursorMapper::engage(const RECT& r) {
         if (MagShowSystemCursor(FALSE)) {
             m_hidden = true;
             g_hidden = true;
+            createLock();
             Log::write("System cursor hidden (virtual cursor drawn on overlay)");
         } else {
             m_magOk = false; // do not retry every tick
@@ -121,6 +157,7 @@ void CursorMapper::release() {
         g_hidden = false;
         Log::write("System cursor restored");
     }
+    if (!m_clipped && !m_hidden) removeLock();
 }
 
 void CursorMapper::update() {

@@ -5,9 +5,9 @@
 
 namespace ffapp {
 
-enum class HotkeyAction { ToggleScaling, ToggleStats };
+enum class HotkeyAction { ToggleScaling, ToggleStats, Quit };
 
-// Hidden message-only window that owns the global hotkeys (Ctrl+Alt+S, Ctrl+Alt+O).
+// Hidden message-only window that owns the global hotkeys (Ctrl+Alt+S, Ctrl+Alt+O, Ctrl+Alt+Q).
 class Hotkeys {
 public:
     explicit Hotkeys(std::function<void(HotkeyAction)> callback);
