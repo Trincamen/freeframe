@@ -4,6 +4,8 @@
 
 #ifdef _WIN32
 #include <windows.h>
+
+#include "bench_scale.hpp"
 #endif
 
 #include "freeframe/format.hpp"
@@ -89,6 +91,19 @@ int main(int argc, char** argv) {
             std::fprintf(stderr, "error: %s\n", e.what());
             return 1;
         }
+    }
+    if (cmd == "bench-scale") {
+#ifdef _WIN32
+        try {
+            return cmdBenchScale(argc - 2, argv + 2);
+        } catch (const std::exception& e) {
+            std::fprintf(stderr, "error: %s\n", e.what());
+            return 1;
+        }
+#else
+        std::fprintf(stderr, "bench-scale: not supported on this platform\n");
+        return 1;
+#endif
     }
     std::fprintf(stderr, "freeframe-cli: unknown command \"%s\"\n\n", cmd.c_str());
     printUsage(stderr);

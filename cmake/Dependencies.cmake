@@ -45,3 +45,15 @@ if(FREEFRAME_BUILD_TESTS)
   )
   FetchContent_MakeAvailable(doctest)
 endif()
+
+# --- AMD FidelityFX FSR 1 (MIT): headers only (ffx_a.h, ffx_fsr1.h), used by fxc and by the C++ constant setup ---
+if(WIN32)
+  FetchContent_Declare(
+    fidelityfx_fsr
+    GIT_REPOSITORY https://github.com/GPUOpen-Effects/FidelityFX-FSR.git
+    GIT_TAG        a21ffb8f6c13233ba336352bdff293894c706575 # v1.0.2
+    SYSTEM
+  )
+  FetchContent_MakeAvailable(fidelityfx_fsr) # the repository has no root CMakeLists.txt: populate only
+  set(FREEFRAME_FSR_INCLUDE_DIR "${fidelityfx_fsr_SOURCE_DIR}/ffx-fsr" CACHE INTERNAL "")
+endif()

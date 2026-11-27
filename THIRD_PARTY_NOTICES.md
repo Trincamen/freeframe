@@ -10,6 +10,12 @@ FreeFrame uses or plans to use the third-party components listed below. Each com
 | volk | Vulkan loader meta-loader | MIT | Arseny Kapoulkine |
 | doctest | Unit test framework | MIT | Viktor Kirilov |
 
+## Used in M1
+
+| Component | Purpose | License | Author / Copyright holder |
+|-----------|---------|---------|---------------------------|
+| AMD FidelityFX FSR 1 (EASU + RCAS; headers ffx_a.h, ffx_fsr1.h, tag v1.0.2) | Spatial upscaling and sharpening (D3D11 compute scaler) | MIT | Advanced Micro Devices, Inc. |
+
 ## Planned
 
 | Component | Purpose | License |
@@ -19,7 +25,6 @@ FreeFrame uses or plans to use the third-party components listed below. Each com
 | nlohmann/json | JSON parsing | MIT |
 | spdlog | Logging | MIT |
 | SQLite | Local database | Public domain |
-| AMD FidelityFX FSR 1 / CAS | Spatial upscaling and sharpening | MIT |
 | NVIDIA Image Scaling | Spatial upscaling and sharpening | MIT |
 | Snapdragon Game Super Resolution (GSR) | Spatial upscaling | BSD-3-Clause |
 | Anime4K | Upscaling for anime-style content | MIT |
