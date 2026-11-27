@@ -432,6 +432,24 @@ O "antes" é o jogo **sem o FreeFrame**. Três formas, da mais simples à mais p
 
 ---
 
+## 7C. Painel dentro do jogo (estilo AMD Adrenalin / NVIDIA overlay)
+
+Além do app completo na bandeja, um **painel sobreposto ao jogo**, aberto por atalho (padrão
+`Ctrl+Alt+F`, configurável; evitar `Alt+R`/`Alt+Z`, usados pelos painéis da AMD/NVIDIA).
+- **Windows (Modo A):** usa a própria janela overlay (ImGui). Ao abrir, o overlay deixa de ser
+  click-through (remove `WS_EX_TRANSPARENT`, recebe foco), libera o `ClipCursor` e mostra o cursor do
+  sistema; o jogo para de receber entrada enquanto o painel está aberto. Ao fechar, devolve o foco ao
+  jogo e reaplica o mapeamento de cursor. Funciona também sem upscaling ativo (overlay só com o
+  painel), mas só para jogos em janela/sem borda.
+- **Linux (Modo B):** desenhado dentro da camada Vulkan, na swapchain do jogo (como o MangoHud).
+- **Conteúdo, sempre do jogo atual:** perfil do jogo com aplicação **ao vivo** (algoritmo, nitidez,
+  frame gen, flow scale, latência), "Salvar no perfil" / "Restaurar padrão"; estatísticas e gráficos
+  daquele jogo (FPS base × exibido, frametime, custo por etapa, cascata antes/depois — seção 7B, via
+  ImPlot); botão "Abrir o app completo".
+- Marcos: painel básico (perfil + ajustes ao vivo) no **M2**; gráficos completos no **M4.5**.
+
+---
+
 ## 8. Estrutura do repositório e build
 
 ```
@@ -558,7 +576,7 @@ jogo em 1280x720 em janela aparece em tela cheia a 1080p/1440p, sem stutter vis�
 captura+escala abaixo de 2 ms na 4070.
 
 **M2 — Segundo plano + detecção + perfis (o diferencial)**
-App de bandeja, início com o sistema, detecção de processos e foco, leitura das bibliotecas
+App de bandeja, **painel dentro do jogo básico (7C)**, início com o sistema, detecção de processos e foco, leitura das bibliotecas
 Steam/Epic/GOG, heurística + exclusões, "Adicionar jogo" (3 formas), perfis JSON com herança do
 padrão e UI de biblioteca. ✔ Aceite: abrir um jogo da Steam ativa o FSR1 sozinho em até ~5 s;
 um jogo fora das bibliotecas pode ser adicionado em 2 cliques; Alt+Tab pausa e retoma; fechar o
@@ -665,3 +683,4 @@ integração com VR (ver observação na seção 11).
 | D7 | 2026-11-27 | CI Windows fixado em `windows-2022` | `windows-latest` passou a ter só o VS 18; o preset usa o gerador VS 17 2022 |
 | D8 | 2026-11-27 | M1: scaler D3D11 em compute shaders escrevendo num UAV `R8G8B8A8_UNORM`; swapchain flip com `DXGI_USAGE_UNORDERED_ACCESS`. Autoelevação (D1) fica para o M2 junto com a bandeja | Mantém o M1 focado em captura → escala → apresentação |
 | D9 | 2026-11-27 | Mapeamento de cursor (ClipCursor no client rect do jogo + cursor do sistema escondido via Magnification + cursor desenhado no overlay) sobe de P1 para o **M1**; overlay escondido/pausado quando o jogo perde o foco; atalho Ctrl+Alt+Q para sair | Teste real (Silent Hill 2): sem isso os cliques atravessavam o overlay para a área de trabalho, o jogo perdia o foco e teclado/controle paravam |
+| D10 | 2026-11-27 | Painel dentro do jogo (seção 7C), atalho `Ctrl+Alt+F`; básico no M2, gráficos no M4.5 | Pedido do usuário: acessar config e gráficos do jogo sem sair dele, como nos painéis AMD/NVIDIA |
